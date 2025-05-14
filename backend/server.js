@@ -3,23 +3,51 @@ import helmet from "helmet";
 import morgan from "morgan";
 import cors from "cors";
 import dotenv from "dotenv";
+import path from "path";
 
 import productRoutes from "./routes/productRoutes.js";
 import { sql } from "./config/db.js";
-
+import { aj } from "./lib/arcjet.js";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const __dirname = path.resolve();
 
-// Middleware
 app.use(express.json());
 app.use(cors());
 app.use(helmet());
 app.use(morgan("dev"));
 
-app.use("/api/products", productRoutes);
+app.use(async (req, res, next) => {
+  try {
+    const decision = await aj.protect(req, {
+      requested: 1, // Check for 1 consumed token
+    });
+
+    if (decision.isDenied()) {
+      if (decision.reason.isRateLimit()) {
+        res.status(429).json({ error: "Too Many Requests" });
+      } else if (decision.reason.isBot()) {
+        res.status(403).json({ error: "Bot access denied" });
+      } else {
+        res.status(403).json({ error: "Forbidden" });
+      }
+      return;
+    }
+    // Check for spoofed bots
+    if (decision.results.some((result) => result.reason.isBot() && result.reason.isSpoofed())) {
+      res.status(403).json({ error: "Spoofed bot detected" });
+      return;
+    }
+
+    next();
+  } catch (error) {
+    console.log("Arcjet error", error);
+    next(error);
+  }
+});
 
 async function initDB() {
   try {
