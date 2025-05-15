@@ -22,7 +22,7 @@ function Navbar() {
                   className="font-semibold font-mono tracking-widest text-2xl
                     bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary"
                 >
-                  POSGRESTORE
+                  Tech Trove
                 </span>
               </div>
             </Link>

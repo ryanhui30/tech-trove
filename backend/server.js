@@ -1,3 +1,4 @@
+
 import express from "express";
 import helmet from "helmet";
 import morgan from "morgan";
@@ -17,13 +18,18 @@ const __dirname = path.resolve();
 
 app.use(express.json());
 app.use(cors());
-app.use(helmet());
-app.use(morgan("dev"));
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+  })
+);
+app.use(morgan("dev")); // Log the requests
 
+// Apply arcjet rate-limit to all routes
 app.use(async (req, res, next) => {
   try {
     const decision = await aj.protect(req, {
-      requested: 1, // Check for 1 consumed token
+      requested: 1, // specifies that each request consumes 1 token
     });
 
     if (decision.isDenied()) {
@@ -36,6 +42,7 @@ app.use(async (req, res, next) => {
       }
       return;
     }
+
     // Check for spoofed bots
     if (decision.results.some((result) => result.reason.isBot() && result.reason.isSpoofed())) {
       res.status(403).json({ error: "Spoofed bot detected" });
@@ -48,6 +55,17 @@ app.use(async (req, res, next) => {
     next(error);
   }
 });
+
+app.use("/api/products", productRoutes);
+
+if (process.env.NODE_ENV === "production") {
+  // Server our react app
+  app.use(express.static(path.join(__dirname, "/frontend/dist")));
+
+  app.get("*", (req, res) => {
+    res.sendFile(path.resolve(__dirname, "frontend", "dist", "index.html"));
+  });
+}
 
 async function initDB() {
   try {
